@@ -105,44 +105,162 @@ def cosine_sim(vec1, vec2):
 # -------------------------------
 # 🌐 STREAMLIT UI
 # -------------------------------
-st.title("🔍 Smart Search Engine (Manual TF-IDF)")
+st.set_page_config(
+    page_title="Smart Search Engine",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-query = st.text_input("Enter your query:")
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .subtitle {
+        font-size: 1.2rem;
+        color: #6c757d;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .search-container {
+        background-color: #f8f9fa;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        border: 1px solid #dee2e6;
+    }
+    .result-card {
+        background-color: white;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: box-shadow 0.3s ease;
+    }
+    .result-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .score-badge {
+        background-color: #28a745;
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    .doc-content {
+        margin-top: 0.5rem;
+        color: #495057;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-TOP_K = 5
-THRESHOLD = 0.1
+# Sidebar
+with st.sidebar:
+    st.header("⚙️ Search Settings")
+    
+    st.markdown("---")
+    st.subheader("Results Configuration")
+    TOP_K = st.slider("Number of results to show", min_value=1, max_value=20, value=5)
+    THRESHOLD = st.slider("Similarity threshold", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
+    
+    st.markdown("---")
+    st.subheader("Dataset Info")
+    st.write(f"📄 Total documents: {len(documents)}")
+    st.write(f"📝 Unique words: {len(vocab)}")
+    
+    st.markdown("---")
+    st.subheader("About")
+    st.write("This search engine uses TF-IDF and cosine similarity to find relevant documents.")
 
-if query:
-    query_tokens = preprocess(query)
-    query_vec = compute_tfidf(query_tokens)
+# Main content
+st.markdown('<div class="main-header">🔍 Smart Search Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Discover relevant documents using advanced TF-IDF search technology</div>', unsafe_allow_html=True)
+st.markdown("*Powered by manual TF-IDF implementation*")
 
-    candidates = get_candidate_docs(query_tokens)
+# Search section
+st.markdown('<div class="search-container">', unsafe_allow_html=True)
+col1, col2 = st.columns([4, 1])
 
-    if not candidates:
-        st.warning("No matching documents found.")
-    else:
-        scores = [
-            (i, cosine_sim(query_vec, doc_vectors[i]))
-            for i in candidates
-        ]
+with col1:
+    query = st.text_input("Enter your search query:", placeholder="e.g., machine learning, deep learning, artificial intelligence", help="Search for keywords or phrases related to AI, NLP, or machine learning topics.")
 
-        scores.sort(key=lambda x: x[1], reverse=True)
+with col2:
+    search_button = st.button("🔍 Search", type="primary", use_container_width=True)
 
-        st.subheader("Top Results:")
+st.caption("💡 Tip: Try specific terms like 'neural networks' or 'natural language processing' for better results.")
+st.markdown('</div>', unsafe_allow_html=True)
 
-        count = 0
-        for i, score in scores:
-            if score > THRESHOLD:
-                st.write(f"Doc {i+1}: {documents[i]} → Score: {score:.2f}")
-                count += 1
-                if count == TOP_K:
-                    break
+# Search logic
+if search_button and query:
+    with st.spinner("Searching..."):
+        query_tokens = preprocess(query)
+        query_vec = compute_tfidf(query_tokens)
+        
+        candidates = get_candidate_docs(query_tokens)
+        
+        if not candidates:
+            st.error("❌ No matching documents found. Try different keywords.")
+        else:
+            scores = [
+                (i, cosine_sim(query_vec, doc_vectors[i]))
+                for i in candidates
+            ]
+            
+            scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Filter by threshold
+            filtered_scores = [(i, score) for i, score in scores if score > THRESHOLD]
+            
+            if not filtered_scores:
+                st.warning(f"⚠️ No results above the threshold of {THRESHOLD:.2f}. Try lowering the threshold or different query.")
+            else:
+                st.success(f"✅ Found {len(filtered_scores)} relevant documents")
+                
+                # Query info
+                with st.expander("🔍 Query Analysis"):
+                    st.write(f"**Original query:** {query}")
+                    st.write(f"**Processed tokens:** {', '.join(query_tokens)}")
+                    st.write(f"**Candidate documents:** {len(candidates)}")
+                
+                st.subheader("📋 Search Results")
+                
+                count = 0
+                for i, score in filtered_scores:
+                    if count >= TOP_K:
+                        break
+                    
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="result-card">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="margin: 0; color: #1f77b4;">Document {i+1}</h4>
+                                <span class="score-badge">Score: {score:.3f}</span>
+                            </div>
+                            <div class="doc-content">
+                                {documents[i]}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    count += 1
+                
+                if len(filtered_scores) > TOP_K:
+                    st.info(f"Showing top {TOP_K} results. {len(filtered_scores) - TOP_K} more results available.")
 
-        if count == 0:
-            st.info("No results above threshold.")
+elif search_button and not query:
+    st.warning("Please enter a search query.")
 
-
-# In[ ]:
+# Footer
+st.markdown("---")
+st.markdown("*Built with ❤️ using Streamlit and pure Python*")
 
 
 
